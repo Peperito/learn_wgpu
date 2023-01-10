@@ -42,6 +42,9 @@ struct State {
     num_indices: u32,
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+    risitas_bind_group: wgpu::BindGroup,
+    risitas_texture: texture::Texture,
+    is_space_pressed: bool,
 }
 
 impl State {
@@ -203,6 +206,26 @@ impl State {
             }
         );
 
+        let risitas_bytes = include_bytes!("risitas.png");
+        let risitas_texture = texture::Texture::from_bytes(&device, &queue, risitas_bytes, "risitas.png").unwrap();
+
+        let risitas_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&risitas_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&risitas_texture.sampler),
+                    }
+                ],
+                label: Some("risitas_bind_group"),
+            }
+        );
+
         Self {
             surface,
             device,
@@ -216,6 +239,9 @@ impl State {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            risitas_bind_group,
+            risitas_texture,
+            is_space_pressed: false,
         }
     }
 
@@ -228,7 +254,7 @@ impl State {
         }
     }
 
-    fn input(&mut self, _event: &WindowEvent) -> bool {
+    fn input(&mut self, event: &WindowEvent) -> bool {
         //Change surface color on mouse cursor Event
         //        match event {
         //            WindowEvent::CursorMoved { 
@@ -247,7 +273,21 @@ impl State {
         //                }
         //            _ => {}
         //        }
-        false
+        match event {
+            WindowEvent::KeyboardInput {
+                input:
+                KeyboardInput {
+                state,
+                virtual_keycode: Some(VirtualKeyCode::Space),
+                ..
+            },
+                ..
+            } => {
+                    self.is_space_pressed = *state == ElementState::Pressed;
+                    true
+                }
+            _ => false,
+        }
     }
 
     fn update(&mut self) {
@@ -277,8 +317,15 @@ impl State {
                 })],
                 depth_stencil_attachment: None,
             });
+
+            let bind_group = if self.is_space_pressed {
+                &self.diffuse_bind_group
+            } else {
+                &self.risitas_bind_group
+            };
+
             render_pass.set_pipeline(&self.render_pipeline); // 2.
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(0, bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
